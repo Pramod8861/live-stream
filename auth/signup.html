@@ -5,21 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign Up - LiveStream Pro</title>
-    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     <link rel="stylesheet" href="styles.css">
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
-
-    <!-- Firebase Core -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <!-- Firebase Auth -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
-    <!-- Firebase Firestore -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
-    <!-- Firebase Realtime Database - ADD THIS -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
 </head>
 
 <body>
@@ -29,21 +16,25 @@
             <p class="subtitle">Start your streaming journey today</p>
 
             <div id="errorMessage" class="error-message" style="display: none;"></div>
+            <div id="successMessage" class="success-message" style="display: none;"></div>
 
-            <form id="signupForm">
+            <form id="signupForm" autocomplete="off">
                 <div class="form-group">
                     <label for="name">Full Name</label>
-                    <input type="text" id="name" required placeholder="Enter your full name">
+                    <input type="text" id="name" name="name" required placeholder="Enter your full name"
+                        autocomplete="name">
                 </div>
 
                 <div class="form-group">
                     <label for="email">Email Address</label>
-                    <input type="email" id="email" required placeholder="Enter your email">
+                    <input type="email" id="email" name="email" required placeholder="Enter your email"
+                        autocomplete="email">
                 </div>
 
                 <div class="form-group">
                     <label for="password">Password</label>
-                    <input type="password" id="password" required placeholder="Choose a password">
+                    <input type="password" id="password" name="password" required placeholder="Choose a password"
+                        autocomplete="new-password">
                 </div>
 
                 <div class="password-strength">
@@ -53,7 +44,8 @@
 
                 <div class="form-group">
                     <label for="confirmPassword">Confirm Password</label>
-                    <input type="password" id="confirmPassword" required placeholder="Confirm your password">
+                    <input type="password" id="confirmPassword" name="confirmPassword" required
+                        placeholder="Confirm your password" autocomplete="new-password">
                 </div>
 
                 <button type="submit" class="btn" id="signupBtn">
@@ -68,6 +60,13 @@
         </div>
     </div>
 
+    <!-- Load Firebase scripts ONCE - in correct order -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+    <!-- Your script -->
     <script src="script.js"></script>
 </body>
 

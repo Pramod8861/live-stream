@@ -1,0 +1,17 @@
+[build]
+  publish = "."
+
+[build.environment]
+  FIREBASE_API_KEY = "AIzaSyBEY1V9m8UIkgWUKJIbdhUuQKCo2I4rztM"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
+    Access-Control-Allow-Headers = "Content-Type"
