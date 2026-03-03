@@ -12,10 +12,17 @@ const firebaseConfig = {
 };
 
 
+
+// Initialize Firebase
 firebase.initializeApp(firebaseConfig);
+
+// Initialize services
 const auth = firebase.auth();
 const firestore = firebase.firestore();
-const realtimeDb = firebase.database(); // Realtime Database
+const realtimeDb = firebase.database(); // This will now work
+
+console.log('✅ Firebase initialized');
+console.log('✅ Realtime Database available:', !!realtimeDb);
 
 // Enable persistence for offline support
 firestore.enablePersistence()
@@ -30,6 +37,7 @@ firestore.enablePersistence()
 // Check if user is already logged in
 auth.onAuthStateChanged((user) => {
     if (user) {
+        console.log('👤 User logged in:', user.email);
         // User is logged in, redirect to host dashboard
         if (window.location.pathname.includes('login.html') ||
             window.location.pathname.includes('signup.html')) {
@@ -178,7 +186,6 @@ if (window.location.pathname.includes('signup.html')) {
             await realtimeDb.ref(`users/${userCredential.user.uid}`).set(userData);
 
             // 3. Save email/password record (securely - for reference only)
-            // Note: Firebase Auth already stores this securely
             await realtimeDb.ref(`user-accounts/${userCredential.user.uid}`).set({
                 email: email,
                 name: name,
