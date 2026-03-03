@@ -1,6 +1,3 @@
-
-
-// Initialize Firebase with your config
 const firebaseConfig = {
     apiKey: "AIzaSyBEY1V9m8UIkgWUKJIbdhUuQKCo2I4rztM",
     authDomain: "live-stream-7b16a.firebaseapp.com",
@@ -11,34 +8,36 @@ const firebaseConfig = {
     appId: "1:13367877746:web:7950e063fee3c01109a2eb"
 };
 
-
-
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 
-// Initialize services
+// Get Firebase services
 const auth = firebase.auth();
 const firestore = firebase.firestore();
-const realtimeDb = firebase.database(); // This will now work
+const realtimeDb = firebase.database();
 
-console.log('✅ Firebase initialized');
-console.log('✅ Realtime Database available:', !!realtimeDb);
+// ✅ IMPORTANT: Set persistence for Netlify
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+    .then(() => console.log('✅ Auth persistence set to LOCAL'))
+    .catch((error) => console.error('Auth persistence error:', error));
 
-// Enable persistence for offline support
-firestore.enablePersistence()
+console.log('✅ Firebase initialized for Netlify');
+
+// Enable Firestore persistence
+firestore.enablePersistence({ synchronizeTabs: true })
+    .then(() => console.log('✅ Firestore persistence enabled'))
     .catch((err) => {
         if (err.code == 'failed-precondition') {
             console.log('Multiple tabs open, persistence enabled in one tab only');
         } else if (err.code == 'unimplemented') {
-            console.log('Browser doesn\'t support persistence');
+            console.log('Browser does not support persistence');
         }
     });
 
 // Check if user is already logged in
 auth.onAuthStateChanged((user) => {
+    console.log('Auth state changed:', user ? user.email : 'No user');
     if (user) {
-        console.log('👤 User logged in:', user.email);
-        // User is logged in, redirect to host dashboard
         if (window.location.pathname.includes('login.html') ||
             window.location.pathname.includes('signup.html')) {
             window.location.href = '../host/index.html';
@@ -46,7 +45,7 @@ auth.onAuthStateChanged((user) => {
     }
 });
 
-// Login functionality
+// LOGIN PAGE
 if (window.location.pathname.includes('login.html')) {
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -58,35 +57,40 @@ if (window.location.pathname.includes('login.html')) {
         const spinner = document.getElementById('loadingSpinner');
         const errorDiv = document.getElementById('errorMessage');
 
-        // Show loading state
         btn.disabled = true;
         btnText.style.display = 'none';
         spinner.style.display = 'inline-block';
         errorDiv.style.display = 'none';
 
         try {
+            // Sign in user
             const userCredential = await auth.signInWithEmailAndPassword(email, password);
+            const user = userCredential.user;
 
-            // Log login activity to Realtime DB
-            await realtimeDb.ref(`users/${userCredential.user.uid}/lastLogin`).set({
-                timestamp: new Date().toISOString(),
-                device: navigator.userAgent
-            });
+            console.log('✅ User logged in:', user.email);
 
-            // Update Firestore user document
-            await firestore.collection('users').doc(userCredential.user.uid).update({
+            // Update login info in Firestore
+            await firestore.collection('users').doc(user.uid).update({
                 lastLogin: firebase.firestore.FieldValue.serverTimestamp(),
                 loginCount: firebase.firestore.FieldValue.increment(1)
-            });
+            }).catch(err => console.log('Firestore update error:', err));
+
+            // Update login info in Realtime Database
+            await realtimeDb.ref(`users/${user.uid}/lastLogin`).set({
+                timestamp: new Date().toISOString(),
+                device: navigator.userAgent
+            }).catch(err => console.log('Realtime DB update error:', err));
 
             // Redirect on success
             window.location.href = '../host/index.html';
+
         } catch (error) {
+            console.error('Login error:', error);
+
             // Show error
             errorDiv.textContent = error.message;
             errorDiv.style.display = 'block';
 
-            // Reset button
             btn.disabled = false;
             btnText.style.display = 'inline';
             spinner.style.display = 'none';
@@ -94,14 +98,12 @@ if (window.location.pathname.includes('login.html')) {
     });
 }
 
-// Signup functionality
+// SIGNUP PAGE
 if (window.location.pathname.includes('signup.html')) {
     const passwordInput = document.getElementById('password');
-    const confirmInput = document.getElementById('confirmPassword');
     const strengthBar = document.getElementById('strengthBar');
     const strengthText = document.getElementById('strengthText');
 
-    // Password strength checker
     passwordInput.addEventListener('input', () => {
         const password = passwordInput.value;
         let strength = 0;
@@ -136,73 +138,79 @@ if (window.location.pathname.includes('signup.html')) {
         const btnText = document.getElementById('btnText');
         const spinner = document.getElementById('loadingSpinner');
         const errorDiv = document.getElementById('errorMessage');
+        const successDiv = document.getElementById('successMessage');
 
-        // Validate passwords match
         if (password !== confirmPassword) {
             errorDiv.textContent = 'Passwords do not match';
             errorDiv.style.display = 'block';
             return;
         }
 
-        // Show loading state
         btn.disabled = true;
         btnText.style.display = 'none';
         spinner.style.display = 'inline-block';
         errorDiv.style.display = 'none';
+        successDiv.style.display = 'none';
 
         try {
-            // Create user
+            console.log('📡 Creating user with email:', email);
+
             const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+            const user = userCredential.user;
 
-            // Update profile with name
-            await userCredential.user.updateProfile({
-                displayName: name
-            });
+            console.log('✅ User created in Auth:', user.uid);
 
-            const userData = {
-                uid: userCredential.user.uid,
-                name: name,
-                email: email,
-                createdAt: new Date().toISOString(),
-                lastLogin: new Date().toISOString(),
-                loginCount: 1,
-                device: navigator.userAgent,
-                status: 'active',
-                role: 'user'
-            };
+            await user.updateProfile({ displayName: name });
+            console.log('✅ User profile updated');
 
-            // 1. Save user to FIRESTORE
-            await firestore.collection('users').doc(userCredential.user.uid).set({
-                name: name,
-                email: email,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                lastLogin: firebase.firestore.FieldValue.serverTimestamp(),
-                loginCount: 1,
-                role: 'user',
-                status: 'active'
-            });
+            // Save to Firestore
+            try {
+                await firestore.collection('users').doc(user.uid).set({
+                    name: name,
+                    email: email,
+                    uid: user.uid,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    lastLogin: firebase.firestore.FieldValue.serverTimestamp(),
+                    loginCount: 1,
+                    role: 'user',
+                    status: 'active'
+                });
+                console.log('✅ User saved to Firestore');
+            } catch (err) {
+                console.error('Firestore error:', err);
+            }
 
-            // 2. Save user to REALTIME DATABASE
-            await realtimeDb.ref(`users/${userCredential.user.uid}`).set(userData);
+            // Save to Realtime Database
+            try {
+                await realtimeDb.ref(`users/${user.uid}`).set({
+                    name: name,
+                    email: email,
+                    uid: user.uid,
+                    createdAt: new Date().toISOString(),
+                    lastLogin: new Date().toISOString(),
+                    loginCount: 1,
+                    device: navigator.userAgent,
+                    role: 'user',
+                    status: 'active'
+                });
+                console.log('✅ User saved to Realtime Database');
+            } catch (err) {
+                console.error('Realtime DB error:', err);
+            }
 
-            // 3. Save email/password record (securely - for reference only)
-            await realtimeDb.ref(`user-accounts/${userCredential.user.uid}`).set({
-                email: email,
-                name: name,
-                created: new Date().toISOString(),
-                method: 'email-password'
-            });
+            successDiv.textContent = 'Account created successfully! Redirecting...';
+            successDiv.style.display = 'block';
 
-            console.log('✅ User data saved to both Firestore and Realtime DB');
+            setTimeout(() => {
+                window.location.href = '../host/index.html';
+            }, 2000);
 
-            // Redirect on success
-            window.location.href = '../host/index.html';
         } catch (error) {
-            // Show error
+            console.error('❌ Signup error:', error);
+
             errorDiv.textContent = error.message;
             errorDiv.style.display = 'block';
 
-            // Reset button
             btn.disabled = false;
             btnText.style.display = 'inline';
             spinner.style.display = 'none';
