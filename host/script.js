@@ -167,11 +167,13 @@ goLiveBtn.addEventListener('click', async () => {
         streamKey.textContent = streamId;
 
         // Notify server via socket
+        // Inside goLiveBtn click handler, after getting streamId
         socket.emit('host-start', {
-            streamId: streamId,
+            streamId: currentStreamId,
             title: title,
             description: streamDescription.value || '',
-            userName: userName
+            userName: currentUser?.displayName || currentUser?.email || 'Host',
+            userId: currentUser?.uid || 'anonymous'  // Add this line
         });
 
         // Update UI
@@ -304,12 +306,11 @@ function sendMessage() {
     const message = chatInput.value.trim();
     if (!message || !currentStreamId || !socket) return;
 
-    const userName = currentUser?.displayName || currentUser?.email || 'Host';
-
     socket.emit('send-message', {
         streamId: currentStreamId,
         message: message,
-        userName: userName
+        userName: currentUser?.displayName || currentUser?.email || 'Host',
+        userId: currentUser?.uid || 'anonymous'  // Add this line
     });
 
     chatInput.value = '';

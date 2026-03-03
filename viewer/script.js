@@ -305,12 +305,12 @@ function sendMessage() {
     socket.emit('send-message', {
         streamId: currentStream.id,
         message: message,
-        userName: currentUser.displayName || currentUser.email || 'Viewer'
+        userName: currentUser.displayName || currentUser.email || 'Viewer',
+        userId: currentUser.uid || 'anonymous'  // Add this line
     });
 
     chatInput.value = '';
 }
-
 function addMessageToChat(message) {
     if (chatMessages.innerHTML.includes('No messages')) {
         chatMessages.innerHTML = '';

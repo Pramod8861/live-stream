@@ -9,9 +9,21 @@ const firebaseConfig = {
     appId: "1:13367877746:web:7950e063fee3c01109a2eb"
 };
 
+
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
-const db = firebase.firestore();
+const firestore = firebase.firestore();
+const realtimeDb = firebase.database(); // Realtime Database
+
+// Enable persistence for offline support
+firestore.enablePersistence()
+    .catch((err) => {
+        if (err.code == 'failed-precondition') {
+            console.log('Multiple tabs open, persistence enabled in one tab only');
+        } else if (err.code == 'unimplemented') {
+            console.log('Browser doesn\'t support persistence');
+        }
+    });
 
 // Check if user is already logged in
 auth.onAuthStateChanged((user) => {
@@ -43,7 +55,20 @@ if (window.location.pathname.includes('login.html')) {
         errorDiv.style.display = 'none';
 
         try {
-            await auth.signInWithEmailAndPassword(email, password);
+            const userCredential = await auth.signInWithEmailAndPassword(email, password);
+
+            // Log login activity to Realtime DB
+            await realtimeDb.ref(`users/${userCredential.user.uid}/lastLogin`).set({
+                timestamp: new Date().toISOString(),
+                device: navigator.userAgent
+            });
+
+            // Update Firestore user document
+            await firestore.collection('users').doc(userCredential.user.uid).update({
+                lastLogin: firebase.firestore.FieldValue.serverTimestamp(),
+                loginCount: firebase.firestore.FieldValue.increment(1)
+            });
+
             // Redirect on success
             window.location.href = '../host/index.html';
         } catch (error) {
@@ -124,12 +149,42 @@ if (window.location.pathname.includes('signup.html')) {
                 displayName: name
             });
 
-            // Save user to Firestore
-            await db.collection('users').doc(userCredential.user.uid).set({
+            const userData = {
+                uid: userCredential.user.uid,
                 name: name,
                 email: email,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                createdAt: new Date().toISOString(),
+                lastLogin: new Date().toISOString(),
+                loginCount: 1,
+                device: navigator.userAgent,
+                status: 'active',
+                role: 'user'
+            };
+
+            // 1. Save user to FIRESTORE
+            await firestore.collection('users').doc(userCredential.user.uid).set({
+                name: name,
+                email: email,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                lastLogin: firebase.firestore.FieldValue.serverTimestamp(),
+                loginCount: 1,
+                role: 'user',
+                status: 'active'
             });
+
+            // 2. Save user to REALTIME DATABASE
+            await realtimeDb.ref(`users/${userCredential.user.uid}`).set(userData);
+
+            // 3. Save email/password record (securely - for reference only)
+            // Note: Firebase Auth already stores this securely
+            await realtimeDb.ref(`user-accounts/${userCredential.user.uid}`).set({
+                email: email,
+                name: name,
+                created: new Date().toISOString(),
+                method: 'email-password'
+            });
+
+            console.log('✅ User data saved to both Firestore and Realtime DB');
 
             // Redirect on success
             window.location.href = '../host/index.html';

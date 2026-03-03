@@ -16,16 +16,14 @@ const serviceAccount = {
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    // Realtime Database URL - ADD YOUR URL HERE
-    databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}-default-rtdb.firebaseio.com/`
+    databaseURL: "https://live-stream-7b16a-default-rtdb.firebaseio.com" // Your Realtime DB URL
 });
 
-// Initialize Firestore
+// Initialize both databases
 const firestore = admin.firestore();
 firestore.settings({ ignoreUndefinedProperties: true });
 
-// Initialize Realtime Database
-const rtdb = admin.database();
+const realtimeDb = admin.database(); // Realtime Database
 
 const app = express();
 const server = http.createServer(app);
@@ -52,45 +50,56 @@ io.on('connection', (socket) => {
 
     // Host starts stream
     socket.on('host-start', async (data) => {
-        const { streamId, title, description, userName } = data;
+        const { streamId, title, description, userName, userId } = data;
 
         console.log('📡 Host starting stream:', streamId);
         console.log('👤 Host name:', userName);
 
-        // ✅ Ensure userName has a default value
+        // ✅ Ensure values have defaults
         const safeUserName = userName || 'Anonymous Host';
+        const safeUserId = userId || 'anonymous';
 
-        // SAVE TO BOTH DATABASES:
+        try {
+            // 1. Save to FIRESTORE
+            await firestore.collection('streams').doc(streamId).set({
+                title: title || 'Untitled Stream',
+                description: description || '',
+                streamerName: safeUserName,
+                streamerId: safeUserId,
+                status: 'live',
+                viewerCount: 0,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                platform: 'web'
+            });
 
-        // 1. Save to Firestore
-        await firestore.collection('streams').doc(streamId).set({
-            title: title || 'Untitled Stream',
-            description: description || '',
-            streamerName: safeUserName,
-            status: 'live',
-            viewerCount: 0,
-            createdAt: admin.firestore.FieldValue.serverTimestamp()
-        });
+            // 2. Save to REALTIME DATABASE
+            const streamRef = realtimeDb.ref(`streams/${streamId}`);
+            await streamRef.set({
+                title: title || 'Untitled Stream',
+                description: description || '',
+                streamerName: safeUserName,
+                streamerId: safeUserId,
+                status: 'live',
+                viewerCount: 0,
+                createdAt: new Date().toISOString(),
+                platform: 'web'
+            });
 
-        // 2. Save to Realtime Database
-        await rtdb.ref(`streams/${streamId}`).set({
-            title: title || 'Untitled Stream',
-            description: description || '',
-            streamerName: safeUserName,
-            status: 'live',
-            viewerCount: 0,
-            createdAt: new Date().toISOString(),
-            startedAt: admin.database.ServerValue.TIMESTAMP
-        });
+            console.log('✅ Stream saved to both Firestore and Realtime DB');
 
-        // Track this stream
-        activeStreams.set(streamId, {
-            host: socket.id,
-            viewers: new Set()
-        });
+            // Track this stream
+            activeStreams.set(streamId, {
+                host: socket.id,
+                viewers: new Set()
+            });
 
-        socket.join(`stream-${streamId}`);
-        socket.emit('host-ready', { streamId });
+            socket.join(`stream-${streamId}`);
+            socket.emit('host-ready', { streamId });
+
+        } catch (error) {
+            console.error('❌ Error saving stream:', error);
+            socket.emit('error', 'Failed to start stream');
+        }
     });
 
     // Viewer joins stream
@@ -104,16 +113,7 @@ io.on('connection', (socket) => {
         socket.join(`stream-${streamId}`);
         stream.viewers.add(socket.id);
 
-        // Tell host about new viewer
-        io.to(stream.host).emit('viewer-joined', {
-            viewerId: socket.id,
-            count: stream.viewers.size
-        });
-
-        // Update viewer count for all
-        io.to(`stream-${streamId}`).emit('viewer-count', stream.viewers.size);
-
-        // Update viewer count in BOTH databases
+        // Update viewer count in both databases
         const viewerCount = stream.viewers.size;
 
         // Update Firestore
@@ -121,9 +121,18 @@ io.on('connection', (socket) => {
             viewerCount: viewerCount
         }).catch(err => console.log('Firestore update error:', err));
 
-        // Update Realtime Database
-        rtdb.ref(`streams/${streamId}/viewerCount`).set(viewerCount)
-            .catch(err => console.log('RTDB update error:', err));
+        // Update Realtime DB
+        realtimeDb.ref(`streams/${streamId}/viewerCount`).set(viewerCount)
+            .catch(err => console.log('Realtime DB update error:', err));
+
+        // Tell host about new viewer
+        io.to(stream.host).emit('viewer-joined', {
+            viewerId: socket.id,
+            count: viewerCount
+        });
+
+        // Update viewer count for all
+        io.to(`stream-${streamId}`).emit('viewer-count', viewerCount);
 
         console.log(`👤 Viewer joined, ${viewerCount} viewers`);
     });
@@ -155,54 +164,56 @@ io.on('connection', (socket) => {
 
     // Chat
     socket.on('send-message', async (data) => {
-        const { streamId, message, userName } = data;
+        const { streamId, message, userName, userId } = data;
 
-        // SAVE TO BOTH DATABASES:
+        try {
+            const timestamp = new Date().toISOString();
+            const messageId = Date.now().toString();
 
-        // 1. Save to Firestore
-        const chatRef = await firestore.collection('chats').add({
-            streamId,
-            message: message || '',
-            userName: userName || 'Anonymous',
-            timestamp: admin.firestore.FieldValue.serverTimestamp()
-        });
+            // 1. Save to FIRESTORE
+            await firestore.collection('chats').add({
+                streamId,
+                message: message || '',
+                userName: userName || 'Anonymous',
+                userId: userId || 'anonymous',
+                timestamp: admin.firestore.FieldValue.serverTimestamp()
+            });
 
-        // 2. Save to Realtime Database
-        const chatId = chatRef.id;
-        await rtdb.ref(`chats/${streamId}/${chatId}`).set({
-            message: message || '',
-            userName: userName || 'Anonymous',
-            timestamp: new Date().toISOString()
-        });
+            // 2. Save to REALTIME DATABASE
+            const chatRef = realtimeDb.ref(`chats/${streamId}/${messageId}`);
+            await chatRef.set({
+                message: message || '',
+                userName: userName || 'Anonymous',
+                userId: userId || 'anonymous',
+                timestamp: timestamp
+            });
 
-        io.to(`stream-${streamId}`).emit('new-message', {
-            userName: userName || 'Anonymous',
-            message,
-            timestamp: new Date().toISOString()
-        });
+            // Broadcast to all in stream
+            io.to(`stream-${streamId}`).emit('new-message', {
+                userName: userName || 'Anonymous',
+                message,
+                timestamp: timestamp,
+                messageId: messageId
+            });
+
+        } catch (error) {
+            console.error('Chat error:', error);
+        }
     });
 
     // Host stops stream
-    socket.on('host-stop', async (streamId) => {
+    socket.on('host-stop', (streamId) => {
         io.to(`stream-${streamId}`).emit('stream-ended');
         activeStreams.delete(streamId);
 
-        // Update BOTH databases
-        try {
-            // Update Firestore
-            await firestore.collection('streams').doc(streamId).update({
-                status: 'ended',
-                endedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
+        // Update both databases
+        firestore.collection('streams').doc(streamId).update({
+            status: 'ended',
+            endedAt: admin.firestore.FieldValue.serverTimestamp()
+        }).catch(err => console.log('Firestore update error:', err));
 
-            // Update Realtime Database
-            await rtdb.ref(`streams/${streamId}`).update({
-                status: 'ended',
-                endedAt: new Date().toISOString()
-            });
-        } catch (err) {
-            console.log('Error updating stream status:', err);
-        }
+        realtimeDb.ref(`streams/${streamId}/status`).set('ended')
+            .catch(err => console.log('Realtime DB update error:', err));
 
         console.log('🔴 Stream ended:', streamId);
     });
@@ -213,83 +224,43 @@ io.on('connection', (socket) => {
             if (stream.host === socket.id) {
                 io.to(`stream-${streamId}`).emit('stream-ended');
                 activeStreams.delete(streamId);
+
+                // Update both databases
+                firestore.collection('streams').doc(streamId).update({
+                    status: 'ended',
+                    endedAt: admin.firestore.FieldValue.serverTimestamp()
+                }).catch(err => console.log('Firestore update error:', err));
+
+                realtimeDb.ref(`streams/${streamId}/status`).set('ended')
+                    .catch(err => console.log('Realtime DB update error:', err));
+
                 console.log('🔴 Host disconnected, stream ended:', streamId);
+
             } else if (stream.viewers.has(socket.id)) {
                 stream.viewers.delete(socket.id);
                 const viewerCount = stream.viewers.size;
+
+                // Update viewer counts
+                firestore.collection('streams').doc(streamId).update({
+                    viewerCount: viewerCount
+                }).catch(err => console.log('Firestore update error:', err));
+
+                realtimeDb.ref(`streams/${streamId}/viewerCount`).set(viewerCount)
+                    .catch(err => console.log('Realtime DB update error:', err));
 
                 io.to(stream.host).emit('viewer-left', {
                     count: viewerCount
                 });
                 io.to(`stream-${streamId}`).emit('viewer-count', viewerCount);
-
-                // Update viewer count in both databases
-                firestore.collection('streams').doc(streamId).update({
-                    viewerCount: viewerCount
-                }).catch(err => console.log('Firestore update error:', err));
-
-                rtdb.ref(`streams/${streamId}/viewerCount`).set(viewerCount)
-                    .catch(err => console.log('RTDB update error:', err));
             }
         }
     });
 });
 
-// API Routes - FIRESTORE VERSION
-app.get('/api/streams/firestore', async (req, res) => {
-    try {
-        const snapshot = await firestore.collection('streams')
-            .where('status', '==', 'live')
-            .get();
-
-        const streams = [];
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            streams.push({
-                id: doc.id,
-                title: data.title || 'Untitled',
-                description: data.description || '',
-                streamerName: data.streamerName || 'Anonymous',
-                viewerCount: data.viewerCount || 0,
-                createdAt: data.createdAt?.toDate() || new Date()
-            });
-        });
-
-        res.json(streams);
-    } catch (error) {
-        console.error('Error:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// API Routes - REALTIME DATABASE VERSION
-app.get('/api/streams/realtime', async (req, res) => {
-    try {
-        const snapshot = await rtdb.ref('streams').once('value');
-        const streamsData = snapshot.val() || {};
-
-        const streams = Object.entries(streamsData)
-            .filter(([_, data]) => data.status === 'live')
-            .map(([id, data]) => ({
-                id,
-                title: data.title || 'Untitled',
-                description: data.description || '',
-                streamerName: data.streamerName || 'Anonymous',
-                viewerCount: data.viewerCount || 0,
-                createdAt: data.createdAt || new Date().toISOString()
-            }));
-
-        res.json(streams);
-    } catch (error) {
-        console.error('Error:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// COMBINED API - Get from both (Firestore primary, RTDB backup)
+// API Routes
 app.get('/api/streams', async (req, res) => {
     try {
-        // Try Firestore first
+        // Get from Firestore
         const snapshot = await firestore.collection('streams')
             .where('status', '==', 'live')
             .get();
@@ -302,6 +273,7 @@ app.get('/api/streams', async (req, res) => {
                 title: data.title || 'Untitled',
                 description: data.description || '',
                 streamerName: data.streamerName || 'Anonymous',
+                streamerId: data.streamerId || '',
                 viewerCount: data.viewerCount || 0,
                 createdAt: data.createdAt?.toDate() || new Date(),
                 source: 'firestore'
@@ -310,34 +282,29 @@ app.get('/api/streams', async (req, res) => {
 
         res.json(streams);
     } catch (error) {
-        console.log('Firestore failed, trying RTDB:', error.message);
-
-        // Fallback to Realtime Database
-        try {
-            const snapshot = await rtdb.ref('streams').once('value');
-            const streamsData = snapshot.val() || {};
-
-            const streams = Object.entries(streamsData)
-                .filter(([_, data]) => data.status === 'live')
-                .map(([id, data]) => ({
-                    id,
-                    title: data.title || 'Untitled',
-                    description: data.description || '',
-                    streamerName: data.streamerName || 'Anonymous',
-                    viewerCount: data.viewerCount || 0,
-                    createdAt: data.createdAt || new Date().toISOString(),
-                    source: 'realtime'
-                }));
-
-            res.json(streams);
-        } catch (rtdbError) {
-            console.error('Both databases failed:', rtdbError);
-            res.status(500).json({ error: 'Failed to fetch streams from any database' });
-        }
+        console.error('Error:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
-// Get single stream from both databases
+// Get stream from Realtime DB (alternative)
+app.get('/api/rt-streams', async (req, res) => {
+    try {
+        const snapshot = await realtimeDb.ref('streams').once('value');
+        const streams = snapshot.val() || {};
+
+        const streamsList = Object.entries(streams).map(([id, data]) => ({
+            id,
+            ...data,
+            source: 'realtime'
+        })).filter(s => s.status === 'live');
+
+        res.json(streamsList);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.get('/api/streams/:id', async (req, res) => {
     try {
         // Try Firestore first
@@ -350,37 +317,33 @@ app.get('/api/streams/:id', async (req, res) => {
                 title: data.title || 'Untitled',
                 description: data.description || '',
                 streamerName: data.streamerName || 'Anonymous',
+                streamerId: data.streamerId || '',
                 viewerCount: data.viewerCount || 0,
                 status: data.status || 'ended',
                 source: 'firestore'
             });
         }
 
-        // If not in Firestore, try Realtime Database
-        const rtdbSnapshot = await rtdb.ref(`streams/${req.params.id}`).once('value');
-        const rtdbData = rtdbSnapshot.val();
+        // If not in Firestore, try Realtime DB
+        const rtStream = await realtimeDb.ref(`streams/${req.params.id}`).once('value');
 
-        if (rtdbData) {
+        if (rtStream.exists()) {
+            const data = rtStream.val();
             return res.json({
                 id: req.params.id,
-                title: rtdbData.title || 'Untitled',
-                description: rtdbData.description || '',
-                streamerName: rtdbData.streamerName || 'Anonymous',
-                viewerCount: rtdbData.viewerCount || 0,
-                status: rtdbData.status || 'ended',
+                ...data,
                 source: 'realtime'
             });
         }
 
-        return res.status(404).json({ error: 'Stream not found in any database' });
+        return res.status(404).json({ error: 'Stream not found' });
 
     } catch (error) {
-        console.error('Error:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// Create stream (saves to both)
+// Create stream
 app.post('/api/create-stream', async (req, res) => {
     try {
         const { title, description, streamerName, userId } = req.body;
@@ -394,26 +357,23 @@ app.post('/api/create-stream', async (req, res) => {
             streamerId: userId || 'anonymous',
             status: 'idle',
             viewerCount: 0,
-            createdAt: new Date().toISOString()
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            platform: 'web'
         };
 
         // Save to Firestore
-        await firestore.collection('streams').doc(streamId).set({
-            ...streamData,
-            createdAt: admin.firestore.FieldValue.serverTimestamp()
-        });
+        await firestore.collection('streams').doc(streamId).set(streamData);
 
-        // Save to Realtime Database
-        await rtdb.ref(`streams/${streamId}`).set({
+        // Save to Realtime DB
+        await realtimeDb.ref(`streams/${streamId}`).set({
             ...streamData,
-            createdAt: admin.database.ServerValue.TIMESTAMP
+            createdAt: new Date().toISOString()
         });
 
         res.json({
             success: true,
             streamId,
-            ...streamData,
-            savedTo: ['firestore', 'realtime']
+            ...streamData
         });
     } catch (error) {
         console.error('Create stream error:', error);
@@ -421,49 +381,22 @@ app.post('/api/create-stream', async (req, res) => {
     }
 });
 
-// Get chat history from both databases
-app.get('/api/chats/:streamId', async (req, res) => {
+// Get chat history from Realtime DB
+app.get('/api/chat/:streamId', async (req, res) => {
     try {
-        const { streamId } = req.params;
+        const snapshot = await realtimeDb.ref(`chats/${req.params.streamId}`)
+            .orderByKey()
+            .limitToLast(50)
+            .once('value');
 
-        // Try Firestore first
-        const snapshot = await firestore.collection('chats')
-            .where('streamId', '==', streamId)
-            .orderBy('timestamp', 'asc')
-            .limit(50)
-            .get();
+        const chats = snapshot.val() || {};
+        const chatList = Object.entries(chats).map(([id, data]) => ({
+            id,
+            ...data
+        }));
 
-        if (!snapshot.empty) {
-            const chats = [];
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                chats.push({
-                    id: doc.id,
-                    message: data.message,
-                    userName: data.userName,
-                    timestamp: data.timestamp?.toDate() || new Date()
-                });
-            });
-            return res.json({ source: 'firestore', chats });
-        }
-
-        // Fallback to Realtime Database
-        const rtdbSnapshot = await rtdb.ref(`chats/${streamId}`).once('value');
-        const chatsData = rtdbSnapshot.val() || {};
-
-        const chats = Object.entries(chatsData)
-            .map(([id, data]) => ({
-                id,
-                message: data.message,
-                userName: data.userName,
-                timestamp: new Date(data.timestamp || Date.now())
-            }))
-            .sort((a, b) => a.timestamp - b.timestamp);
-
-        res.json({ source: 'realtime', chats });
-
+        res.json(chatList);
     } catch (error) {
-        console.error('Error fetching chats:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -471,9 +404,7 @@ app.get('/api/chats/:streamId', async (req, res) => {
 const PORT = 3000;
 server.listen(PORT, () => {
     console.log(`\n🚀 Server running on port ${PORT}`);
-    console.log(`📊 Firebase initialized with:`);
-    console.log(`   - Firestore ✅`);
-    console.log(`   - Realtime Database ✅`);
+    console.log(`📊 Firestore + Realtime Database both active`);
     console.log(`🌐 Open viewer: http://localhost:5500/viewer/`);
     console.log(`🎥 Open host: http://localhost:5500/host/\n`);
 });
