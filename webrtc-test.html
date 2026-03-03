@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Cloudflare Realtime Test</title>
+</head>
+
+<body>
+    <h1>Cloudflare Realtime Test</h1>
+
+    <video id="localVideo" autoplay playsinline muted style="width: 45%;"></video>
+    <video id="remoteVideo" autoplay playsinline style="width: 45%;"></video>
+
+    <button onclick="startStream()">Start Streaming</button>
+    <button onclick="watchStream()">Watch Stream</button>
+
+    <script>
+        const appId = 'fcbe6291ed6d89f28d2ebb8772d8a0f8';
+        const token = 'fd9f9a97baaaaf26d98e31c4d654a260b44862a778a676f759ffda4225135f99';
+        const sessionId = 'test-session-' + Date.now();
+
+        let pc;
+
+        async function startStream() {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: true, audio: true
+            });
+
+            document.getElementById('localVideo').srcObject = stream;
+
+            pc = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }]
+            });
+
+            stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+
+            const response = await fetch(`https://rtc.live.cloudflare.com/v1/apps/${appId}/sessions/${sessionId}/offers`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/sdp'
+                },
+                body: offer.sdp
+            });
+
+            const answer = await response.text();
+            await pc.setRemoteDescription({ type: 'answer', sdp: answer });
+
+            console.log('Streaming started!');
+        }
+
+        async function watchStream() {
+            pc = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }]
+            });
+
+            pc.ontrack = (event) => {
+                document.getElementById('remoteVideo').srcObject = event.streams[0];
+            };
+
+            const response = await fetch(`https://rtc.live.cloudflare.com/v1/apps/${appId}/sessions/${sessionId}/offers/current`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const offer = await response.text();
+
+            await pc.setRemoteDescription({ type: 'offer', sdp: offer });
+
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+
+            await fetch(`https://rtc.live.cloudflare.com/v1/apps/${appId}/sessions/${sessionId}/answers`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/sdp'
+                },
+                body: answer.sdp
+            });
+
+            console.log('Watching stream!');
+        }
+    </script>
+</body>
+
+</html>

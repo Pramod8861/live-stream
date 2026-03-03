@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watch Live - LiveStream Pro</title>
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- Load scripts in correct order -->
+    <!-- 1. Firebase first -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+
+    <!-- 2. HLS.js - Make sure this loads -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.12/dist/hls.min.js"></script>
+
+    <!-- 3. Socket.IO -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <nav>
+            <div class="logo">LiveStream Pro - Watch Live</div>
+            <div id="authButtons" class="nav-buttons">
+                <a href="../auth/login.html" class="nav-btn login-btn">Login</a>
+                <a href="../auth/signup.html" class="nav-btn signup-btn">Sign Up</a>
+            </div>
+            <div id="userInfo" class="user-info" style="display: none;">
+                <span id="userName"></span>
+                <button class="logout-btn" id="logoutBtn">Logout</button>
+            </div>
+        </nav>
+
+        <div id="streamsView">
+            <div class="search-section">
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="Search streams...">
+                    <button id="searchBtn">Search</button>
+                </div>
+            </div>
+
+            <div id="streamsGrid" class="streams-grid">
+                <div class="loading">Loading streams...</div>
+            </div>
+        </div>
+
+        <div id="playerView" class="stream-player-container" style="display: none;">
+            <div class="player-section">
+                <button class="back-btn" id="backBtn">
+                    <span>←</span> Back to streams
+                </button>
+
+                <div class="video-player">
+                    <video id="videoPlayer" controls autoplay playsinline></video>
+                </div>
+
+                <div class="stream-metadata">
+                    <h2 id="streamTitle"></h2>
+                    <div class="stream-stats">
+                        <span id="streamerName"></span>
+                        <span id="viewerCount">0 viewers</span>
+                        <span id="streamStatus" class="live-badge">LIVE</span>
+                    </div>
+                    <p id="streamDescription" class="stream-description"></p>
+                </div>
+            </div>
+
+            <div class="chat-section">
+                <h3>Live Chat</h3>
+                <div class="chat-container">
+                    <div class="chat-messages" id="chatMessages"></div>
+                    <div class="chat-input">
+                        <input type="text" id="chatInput" placeholder="Type a message..." disabled>
+                        <button id="sendMessageBtn" disabled>Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Your script MUST come LAST -->
+    <script src="script.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Host Dashboard - LiveStream Pro</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <nav>
+            <div class="logo">LiveStream Pro - Host Dashboard</div>
+            <div class="user-info">
+                <span id="userName"></span>
+                <button class="logout-btn" id="logoutBtn">Logout</button>
+            </div>
+        </nav>
+
+        <div class="dashboard-grid">
+            <!-- Stream Setup Section -->
+            <div class="setup-section">
+                <h2><i>🎥</i> Stream Setup</h2>
+                <div class="form-group">
+                    <label for="streamTitle">Stream Title</label>
+                    <input type="text" id="streamTitle" placeholder="Enter stream title">
+                </div>
+                <div class="form-group">
+                    <label for="streamDescription">Stream Description</label>
+                    <textarea id="streamDescription" placeholder="Describe your stream"></textarea>
+                </div>
+            </div>
+
+            <!-- Camera Preview Section -->
+            <div class="preview-section">
+                <h2><i>📹</i> Camera Preview</h2>
+                <div class="device-selector">
+                    <select id="cameraSelect"></select>
+                    <select id="microphoneSelect"></select>
+                </div>
+                <div class="video-preview">
+                    <video id="previewVideo" autoplay muted playsinline></video>
+                </div>
+                <div class="control-buttons">
+                    <button class="btn btn-primary" id="startPreviewBtn">
+                        <i>▶️</i> Start Preview
+                    </button>
+                    <button class="btn btn-primary" id="goLiveBtn" disabled>
+                        <i>🔴</i> Go Live
+                    </button>
+                    <button class="btn btn-danger" id="endStreamBtn" disabled>
+                        <i>⏹️</i> End Stream
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stream Info Section -->
+            <div class="stream-info-section">
+                <h2><i>ℹ️</i> Stream Information</h2>
+                <div id="streamInfo" style="display: none;">
+                    <div class="stream-info">
+                        <div class="info-item">
+                            <span class="info-label">Stream Status</span>
+                            <span class="info-value">
+                                <span id="streamStatus" class="live-badge">Idle</span>
+                            </span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Viewers</span>
+                            <span class="info-value viewer-count">
+                                <span id="viewerCount">0</span>
+                                <i>👥</i>
+                            </span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Stream Duration</span>
+                            <span class="info-value" id="streamDuration">00:00:00</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">RTMP URL</span>
+                            <span class="info-value">
+                                <span id="rtmpUrl"></span>
+                                <button class="copy-btn" onclick="copyToClipboard('rtmpUrl')">Copy</button>
+                            </span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Stream Key</span>
+                            <span class="info-value">
+                                <span id="streamKey"></span>
+                                <button class="copy-btn" onclick="copyToClipboard('streamKey')">Copy</button>
+                            </span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Playback ID</span>
+                            <span class="info-value">
+                                <span id="playbackId"></span>
+                                <button class="copy-btn" onclick="copyToClipboard('playbackId')">Copy</button>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="obs-instructions">
+                        <h4>📺 OBS Studio Setup</h4>
+                        <p>1. Open OBS Studio</p>
+                        <p>2. Go to Settings → Stream</p>
+                        <p>3. Select "Custom" as Service</p>
+                        <p>4. Copy RTMP URL and Stream Key from above</p>
+                        <p>5. Paste them in OBS and start streaming</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Chat Section -->
+            <div class="chat-section">
+                <h2><i>💬</i> Live Chat</h2>
+                <div class="chat-container">
+                    <div class="chat-messages" id="chatMessages"></div>
+                    <div class="chat-input">
+                        <input type="text" id="chatInput" placeholder="Type a message..." disabled>
+                        <button class="btn btn-primary" id="sendMessageBtn" disabled>Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
